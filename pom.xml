@@ -56,14 +56,14 @@
 
 	<distributionManagement>
 		<repository>
-			<id>repo.eclipse.org</id>
-			<name>Paho Repository - Releases</name>
-			<url>https://repo.eclipse.org/content/repositories/paho-releases/</url>
+			<id>nexus</id>
+			<name>Nexus Repository - Releases</name>
+			<url>http://packages.geotracinternational.com/nexus/repository/maven-releases/</url>
 		</repository>
 		<snapshotRepository>
-			<id>repo.eclipse.org</id>
-			<name>Paho Repository - Snapshots</name>
-			<url>https://repo.eclipse.org/content/repositories/paho-snapshots/</url>
+			<id>nexus</id>
+			<name>Nexus Repository - Snapshots</name>
+			<url>http://packages.geotracinternational.com/nexus/repository/maven-snapshots/</url>
 		</snapshotRepository>
 	</distributionManagement>
 
@@ -207,11 +207,20 @@
 				 -->
 				<groupId>org.sonatype.plugins</groupId>
 				<artifactId>nexus-staging-maven-plugin</artifactId>
-				<version>1.6.5</version>
-				<extensions>true</extensions>
+				<version>1.6.8</version>
+<!--				<extensions>true</extensions>-->
+				<executions>
+					<execution>
+						<id>default-deploy</id>
+						<phase>deploy</phase>
+						<goals>
+							<goal>deploy</goal>
+						</goals>
+					</execution>
+				</executions>
 				<configuration>
-					<serverId>ossrh</serverId>
-					<nexusUrl>https://oss.sonatype.org/</nexusUrl>
+					<serverId>nexus</serverId>
+					<nexusUrl>http://packages.geotracinternational.com/nexus/</nexusUrl>
 					<autoReleaseAfterClose>false</autoReleaseAfterClose>
 				</configuration>
 			</plugin>
