@@ -21,38 +21,16 @@
  */
 package org.eclipse.paho.client.mqttv3.internal;
 
+import org.eclipse.paho.client.mqttv3.*;
+import org.eclipse.paho.client.mqttv3.internal.wire.*;
+import org.eclipse.paho.client.mqttv3.logging.Logger;
+import org.eclipse.paho.client.mqttv3.logging.LoggerFactory;
+
 import java.io.EOFException;
 import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.Properties;
 import java.util.Vector;
-
-import org.eclipse.paho.client.mqttv3.IMqttActionListener;
-import org.eclipse.paho.client.mqttv3.MqttClientPersistence;
-import org.eclipse.paho.client.mqttv3.MqttDeliveryToken;
-import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
-import org.eclipse.paho.client.mqttv3.MqttPersistable;
-import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
-import org.eclipse.paho.client.mqttv3.MqttPingSender;
-import org.eclipse.paho.client.mqttv3.MqttToken;
-import org.eclipse.paho.client.mqttv3.internal.wire.MqttAck;
-import org.eclipse.paho.client.mqttv3.internal.wire.MqttConnack;
-import org.eclipse.paho.client.mqttv3.internal.wire.MqttConnect;
-import org.eclipse.paho.client.mqttv3.internal.wire.MqttPingReq;
-import org.eclipse.paho.client.mqttv3.internal.wire.MqttPingResp;
-import org.eclipse.paho.client.mqttv3.internal.wire.MqttPubAck;
-import org.eclipse.paho.client.mqttv3.internal.wire.MqttPubComp;
-import org.eclipse.paho.client.mqttv3.internal.wire.MqttPubRec;
-import org.eclipse.paho.client.mqttv3.internal.wire.MqttPubRel;
-import org.eclipse.paho.client.mqttv3.internal.wire.MqttPublish;
-import org.eclipse.paho.client.mqttv3.internal.wire.MqttSuback;
-import org.eclipse.paho.client.mqttv3.internal.wire.MqttSubscribe;
-import org.eclipse.paho.client.mqttv3.internal.wire.MqttUnsubAck;
-import org.eclipse.paho.client.mqttv3.internal.wire.MqttUnsubscribe;
-import org.eclipse.paho.client.mqttv3.internal.wire.MqttWireMessage;
-import org.eclipse.paho.client.mqttv3.logging.Logger;
-import org.eclipse.paho.client.mqttv3.logging.LoggerFactory;
 
 /**
  * The core of the client, which holds the state information for pending and
@@ -112,7 +90,7 @@ public class ClientState {
 	private Hashtable inUseMsgIds;					// Used to store a set of in-use message IDs
 
 	volatile private Vector pendingMessages;
-	volatile private Vector pendingFlows;
+	volatile private Vector<MqttWireMessage> pendingFlows;
 	
 	private CommsTokenStore tokenStore;
 	private ClientComms clientComms = null;
@@ -125,15 +103,15 @@ public class ClientState {
 	private int actualInFlight = 0;
 	private int inFlightPubRels = 0;
 	
-	private Object queueLock = new Object();
-	private Object quiesceLock = new Object();
+	private final Object queueLock = new Object();
+	private final Object quiesceLock = new Object();
 	private boolean quiescing = false;
 	
 	private long lastOutboundActivity = 0;
 	private long lastInboundActivity = 0;
 	private long lastPing = 0;
 	private MqttWireMessage pingCommand;
-	private Object pingOutstandingLock = new Object();
+	private final Object pingOutstandingLock = new Object();
 	private int pingOutstanding = 0;
 
 	private boolean connected = false;
@@ -152,7 +130,7 @@ public class ClientState {
 		log.finer(CLASS_NAME, "<Init>", "" );
 
 		inUseMsgIds = new Hashtable();
-		pendingFlows = new Vector();
+		pendingFlows = new Vector<>();
 		outboundQoS2 = new Hashtable();
 		outboundQoS1 = new Hashtable();
 		outboundQoS0 = new Hashtable();
@@ -670,7 +648,7 @@ public class ClientState {
         }
 
 		MqttToken token = null;
-		long nextPingTime = getKeepAlive();
+		long nextPingTime;
 		
 		if (connected && this.keepAlive > 0) {
 			long time = System.currentTimeMillis();
@@ -687,7 +665,7 @@ public class ClientState {
                     // Add a delta, since the timer and System.currentTimeMillis() is not accurate.                                                                                                                        
                 	// A ping is outstanding but no packet has been received in KA so connection is deemed broken                                                                                                         
                     //@TRACE 619=Timed out as no activity, keepAlive={0} lastOutboundActivity={1} lastInboundActivity={2} time={3} lastPing={4}                                                                           
-                    log.severe(CLASS_NAME,methodName,"619", new Object[]{new Long(this.keepAlive),new Long(lastOutboundActivity),new Long(lastInboundActivity), new Long(time), new Long(lastPing)});
+                    log.severe(CLASS_NAME,methodName,"619", new Object[]{this.keepAlive, lastOutboundActivity, lastInboundActivity, time, lastPing});
 
                     // A ping has already been sent. At this point, assume that the                                                                                                                                       
                     // broker has hung and the TCP layer hasn't noticed.                                                                                                                                                  
@@ -698,7 +676,7 @@ public class ClientState {
                 if (pingOutstanding == 0 && (time - lastOutboundActivity >= 2*keepAlive)) {
                     
                     // I am probably blocked on a write operations as I should have been able to write at least a ping message                                                                                                    
-                	log.severe(CLASS_NAME,methodName,"642", new Object[]{new Long(this.keepAlive),new Long(lastOutboundActivity),new Long(lastInboundActivity), new Long(time), new Long(lastPing)});
+                	log.severe(CLASS_NAME,methodName,"642", new Object[]{this.keepAlive, lastOutboundActivity, lastInboundActivity, time, lastPing});
 
                     // A ping has not been sent but I am not progressing on the current write operation. 
                 	// At this point, assume that the broker has hung and the TCP layer hasn't noticed.                                                                                                                                                  
@@ -718,7 +696,7 @@ public class ClientState {
                     (time - lastOutboundActivity >= keepAlive - delta)) {
 
                     //@TRACE 620=ping needed. keepAlive={0} lastOutboundActivity={1} lastInboundActivity={2}                                                                                                              
-                    log.fine(CLASS_NAME,methodName,"620", new Object[]{new Long(this.keepAlive),new Long(lastOutboundActivity),new Long(lastInboundActivity)});
+                    log.fine(CLASS_NAME,methodName,"620", new Object[]{this.keepAlive, lastOutboundActivity, lastInboundActivity});
 
                     // pingOutstanding++;  // it will be set after the ping has been written on the wire                                                                                                             
                     // lastPing = time;    // it will be set after the ping has been written on the wire                                                                                                             
@@ -740,7 +718,7 @@ public class ClientState {
                 }
             }
             //@TRACE 624=Schedule next ping at {0}                                                                                                                                                                                
-            log.fine(CLASS_NAME, methodName,"624", new Object[]{new Long(nextPingTime)});
+            log.fine(CLASS_NAME, methodName,"624", new Object[]{nextPingTime});
             pingSender.schedule(nextPingTime);
 		}
 		
