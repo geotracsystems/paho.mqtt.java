@@ -683,39 +683,24 @@ public class ClientState {
                     throw ExceptionHelper.createMqttException(MqttException.REASON_CODE_WRITE_TIMEOUT);
                 }
 
-                // 1. Is a ping required by the client to verify whether the broker is down?                                                                                                                                  
-                //    Condition: ((pingOutstanding == 0 && (time - lastInboundActivity >= keepAlive + delta)))                                                                                                                
-                //    In this case only one ping is sent. If not confirmed, client will assume a lost connection to the broker.                                                                                               
-                // 2. Is a ping required by the broker to keep the client alive?                                                                                                                                              
-                //    Condition: (time - lastOutboundActivity >= keepAlive - delta)                                                                                                                                           
-                //    In this case more than one ping outstanding may be necessary.                                                                                                                                           
-                //    This would be the case when receiving a large message;                                                                                                                                                  
-                //    the broker needs to keep receiving a regular ping even if the ping response are queued after the long message                                                                                           
-                //    If lacking to do so, the broker will consider my connection lost and cut my socket.                                                                                                                     
-                if ((pingOutstanding == 0 && (time - lastInboundActivity >= keepAlive - delta)) ||
-                    (time - lastOutboundActivity >= keepAlive - delta)) {
+                // Always send a ping if we get here
+				//@TRACE 620=ping needed. keepAlive={0} lastOutboundActivity={1} lastInboundActivity={2}
+				log.fine(CLASS_NAME,methodName,"620", new Object[]{this.keepAlive, lastOutboundActivity, lastInboundActivity});
 
-                    //@TRACE 620=ping needed. keepAlive={0} lastOutboundActivity={1} lastInboundActivity={2}                                                                                                              
-                    log.fine(CLASS_NAME,methodName,"620", new Object[]{this.keepAlive, lastOutboundActivity, lastInboundActivity});
+				// pingOutstanding++;  // it will be set after the ping has been written on the wire
+				// lastPing = time;    // it will be set after the ping has been written on the wire
+				token = new MqttToken(clientComms.getClient().getClientId());
+				if(pingCallback != null){
+					token.setActionCallback(pingCallback);
+				}
+				tokenStore.saveToken(token, pingCommand);
+				pendingFlows.insertElementAt(pingCommand, 0);
 
-                    // pingOutstanding++;  // it will be set after the ping has been written on the wire                                                                                                             
-                    // lastPing = time;    // it will be set after the ping has been written on the wire                                                                                                             
-                    token = new MqttToken(clientComms.getClient().getClientId());
-                    if(pingCallback != null){
-                    	token.setActionCallback(pingCallback);
-                    }
-                    tokenStore.saveToken(token, pingCommand);
-                    pendingFlows.insertElementAt(pingCommand, 0);
+				//Wake sender thread since it may be in wait state (in ClientState.get())
+				notifyQueueLock();
 
-                    nextPingTime = getKeepAlive();
-
-                    //Wake sender thread since it may be in wait state (in ClientState.get())                                                                                                                             
-                    notifyQueueLock();
-                }
-                else {
-                    log.fine(CLASS_NAME, methodName, "634", null);
-                    nextPingTime = Math.max(1, getKeepAlive() - (time - lastOutboundActivity));
-                }
+				// Schedule the next ping at half the keep alive interval to ensure we don't get disconnected
+				nextPingTime = getKeepAlive() / 2;
             }
             //@TRACE 624=Schedule next ping at {0}                                                                                                                                                                                
             log.fine(CLASS_NAME, methodName,"624", new Object[]{nextPingTime});
