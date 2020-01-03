@@ -4,7 +4,7 @@
 	<groupId>org.eclipse.paho</groupId>
 	<artifactId>java-parent</artifactId>
 	<packaging>pom</packaging>
-	<version>1.2.0</version>
+	<version>1.2.0-SNAPSHOT</version>
 
 	<properties>
 		<!-- source & target java version for MQTT Client -->
@@ -56,14 +56,14 @@
 
 	<distributionManagement>
 		<repository>
-			<id>repo.eclipse.org</id>
-			<name>Paho Repository - Releases</name>
-			<url>https://repo.eclipse.org/content/repositories/paho-releases/</url>
+			<id>nexus</id>
+			<name>Nexus Repository - Releases</name>
+			<url>http://packages.geotracinternational.com/nexus/repository/maven-releases/</url>
 		</repository>
 		<snapshotRepository>
-			<id>repo.eclipse.org</id>
-			<name>Paho Repository - Snapshots</name>
-			<url>https://repo.eclipse.org/content/repositories/paho-snapshots/</url>
+			<id>nexus</id>
+			<name>Nexus Repository - Snapshots</name>
+			<url>http://packages.geotracinternational.com/nexus/repository/maven-snapshots/</url>
 		</snapshotRepository>
 	</distributionManagement>
 
@@ -191,30 +191,6 @@
 					</execution>
 				</executions>
 			</plugin>
-			<plugin>
-				<!--
-					Use the Nexus Staging plugin as a full replacement for the standard
-					Maven Deploy plugin.
-					See https://github.com/sonatype/nexus-maven-plugins/tree/master/staging/maven-plugin
-					why this makes sense :-)
-					We can control whether we want to deploy to the Eclipse repo or Maven Central
-					by a combination of the version being a SNAPHOT or release version and property
-					skipStaging=true/false.
-					In any case we can take advantage of the plugin's "deferred deploy" feature which
-					makes sure that all artifacts of a multi-module project are deployed as a whole
-					at the end of the build process instead of deploying each module's artifacts
-					individually as part of building the module.
-				 -->
-				<groupId>org.sonatype.plugins</groupId>
-				<artifactId>nexus-staging-maven-plugin</artifactId>
-				<version>1.6.5</version>
-				<extensions>true</extensions>
-				<configuration>
-					<serverId>ossrh</serverId>
-					<nexusUrl>https://oss.sonatype.org/</nexusUrl>
-					<autoReleaseAfterClose>false</autoReleaseAfterClose>
-				</configuration>
-			</plugin>
 		</plugins>
 	</build>
 
@@ -320,9 +296,9 @@
 	<modules>
 		<module>org.eclipse.paho.client.mqttv3</module>
 		<module>org.eclipse.paho.client.mqttv3.test</module>
-		<module>org.eclipse.paho.client.eclipse.feature</module>
-		<module>org.eclipse.paho.client.eclipse.view</module>
-		<module>org.eclipse.paho.client.mqttv3.repository</module>
+<!--		<module>org.eclipse.paho.client.eclipse.feature</module>-->
+<!--		<module>org.eclipse.paho.client.eclipse.view</module>-->
+<!--		<module>org.eclipse.paho.client.mqttv3.repository</module>-->
 		<module>org.eclipse.paho.sample.utility</module>
 		<module>org.eclipse.paho.ui</module>
 	</modules>
