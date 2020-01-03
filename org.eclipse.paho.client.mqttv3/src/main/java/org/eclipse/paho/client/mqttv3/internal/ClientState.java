@@ -639,13 +639,13 @@ public class ClientState {
 		//@TRACE 616=checkForActivity entered
 		log.fine(CLASS_NAME,methodName,"616", new Object[]{});
 		
-        synchronized (quiesceLock) {
-            // ref bug: https://bugs.eclipse.org/bugs/show_bug.cgi?id=440698
-            // No ping while quiescing
-            if (quiescing) {
-                return null;
-            }
-        }
+		synchronized (quiesceLock) {
+			// ref bug: https://bugs.eclipse.org/bugs/show_bug.cgi?id=440698
+			// No ping while quiescing
+			if (quiescing) {
+				return null;
+			}
+		}
 
 		MqttToken token = null;
 		long nextPingTime;
@@ -657,38 +657,37 @@ public class ClientState {
 			int delta = 100;
 			
 			// ref bug: https://bugs.eclipse.org/bugs/show_bug.cgi?id=446663
-            synchronized (pingOutstandingLock) {
+			synchronized (pingOutstandingLock) {
+				// Is the broker connection lost because the broker did not reply to my ping?
+				if (pingOutstanding > 0 && (time - lastInboundActivity >= keepAlive + delta)) {
+					// lastInboundActivity will be updated once receiving is done.
+					// Add a delta, since the timer and System.currentTimeMillis() is not accurate.
+					// A ping is outstanding but no packet has been received in KA so connection is deemed broken
+					//@TRACE 619=Timed out as no activity, keepAlive={0} lastOutboundActivity={1} lastInboundActivity={2} time={3} lastPing={4}
+					log.severe(CLASS_NAME,methodName,"619", new Object[]{this.keepAlive, lastOutboundActivity, lastInboundActivity, time, lastPing});
 
-                // Is the broker connection lost because the broker did not reply to my ping?                                                                                                                                 
-                if (pingOutstanding > 0 && (time - lastInboundActivity >= keepAlive + delta)) {
-                    // lastInboundActivity will be updated once receiving is done.                                                                                                                                        
-                    // Add a delta, since the timer and System.currentTimeMillis() is not accurate.                                                                                                                        
-                	// A ping is outstanding but no packet has been received in KA so connection is deemed broken                                                                                                         
-                    //@TRACE 619=Timed out as no activity, keepAlive={0} lastOutboundActivity={1} lastInboundActivity={2} time={3} lastPing={4}                                                                           
-                    log.severe(CLASS_NAME,methodName,"619", new Object[]{this.keepAlive, lastOutboundActivity, lastInboundActivity, time, lastPing});
+					// A ping has already been sent. At this point, assume that the
+					// broker has hung and the TCP layer hasn't noticed.
+					throw ExceptionHelper.createMqttException(MqttException.REASON_CODE_CLIENT_TIMEOUT);
+				}
 
-                    // A ping has already been sent. At this point, assume that the                                                                                                                                       
-                    // broker has hung and the TCP layer hasn't noticed.                                                                                                                                                  
-                    throw ExceptionHelper.createMqttException(MqttException.REASON_CODE_CLIENT_TIMEOUT);
-                }
+				// Is the broker connection lost because I could not get any successful write for 2 keepAlive intervals?
+				if (pingOutstanding == 0 && (time - lastOutboundActivity >= 2*keepAlive)) {
+					
+					// I am probably blocked on a write operations as I should have been able to write at least a ping message
+					log.severe(CLASS_NAME,methodName,"642", new Object[]{this.keepAlive, lastOutboundActivity, lastInboundActivity, time, lastPing});
 
-                // Is the broker connection lost because I could not get any successful write for 2 keepAlive intervals?                                                                                                      
-                if (pingOutstanding == 0 && (time - lastOutboundActivity >= 2*keepAlive)) {
-                    
-                    // I am probably blocked on a write operations as I should have been able to write at least a ping message                                                                                                    
-                	log.severe(CLASS_NAME,methodName,"642", new Object[]{this.keepAlive, lastOutboundActivity, lastInboundActivity, time, lastPing});
+					// A ping has not been sent but I am not progressing on the current write operation.
+					// At this point, assume that the broker has hung and the TCP layer hasn't noticed.
+					throw ExceptionHelper.createMqttException(MqttException.REASON_CODE_WRITE_TIMEOUT);
+				}
 
-                    // A ping has not been sent but I am not progressing on the current write operation. 
-                	// At this point, assume that the broker has hung and the TCP layer hasn't noticed.                                                                                                                                                  
-                    throw ExceptionHelper.createMqttException(MqttException.REASON_CODE_WRITE_TIMEOUT);
-                }
-
-                // Always send a ping if we get here
+				// Always send a ping if we get here
 				//@TRACE 620=ping needed. keepAlive={0} lastOutboundActivity={1} lastInboundActivity={2}
 				log.fine(CLASS_NAME,methodName,"620", new Object[]{this.keepAlive, lastOutboundActivity, lastInboundActivity});
 
 				// pingOutstanding++;  // it will be set after the ping has been written on the wire
-				// lastPing = time;    // it will be set after the ping has been written on the wire
+				// lastPing = time;	// it will be set after the ping has been written on the wire
 				token = new MqttToken(clientComms.getClient().getClientId());
 				if(pingCallback != null){
 					token.setActionCallback(pingCallback);
@@ -701,10 +700,10 @@ public class ClientState {
 
 				// Schedule the next ping at half the keep alive interval to ensure we don't get disconnected
 				nextPingTime = getKeepAlive() / 2;
-            }
-            //@TRACE 624=Schedule next ping at {0}                                                                                                                                                                                
-            log.fine(CLASS_NAME, methodName,"624", new Object[]{nextPingTime});
-            pingSender.schedule(nextPingTime);
+			}
+			//@TRACE 624=Schedule next ping at {0}
+			log.fine(CLASS_NAME, methodName,"624", new Object[]{nextPingTime});
+			pingSender.schedule(nextPingTime);
 		}
 		
 		return token;
